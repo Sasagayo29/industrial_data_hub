@@ -1,0 +1,116 @@
+# Define a versão do Docker Compose
+version: "3.8"
+
+# Define todos os nossos serviços (contêineres)
+services:
+    # --- 1. Serviço: Banco de Dados (MySQL) ---
+    db:
+        image: mysql:8.0 # Usa a imagem oficial do MySQL 8
+        container_name: idh-mysql
+        restart: unless-stopped
+        environment:
+            # Define as variáveis de ambiente que o contêiner MySQL espera
+            MYSQL_ROOT_PASSWORD: ${DB_PASSWORD} # Pega a senha do arquivo .env
+            MYSQL_DATABASE: ${DB_NAME} # Pega o nome do DB do arquivo .env
+        ports:
+            # Mapeia a porta 3306 do seu PC para a porta 3306 do contêiner
+            # Permite que você conecte via MySQL Workbench
+            - "3306:3306"
+        volumes:
+            # Cria um "volume nomeado" para persistir os dados do banco
+            - db-data:/var/lib/mysql
+
+    # --- 2. Serviço: Fila de Mensagens (RabbitMQ) ---
+    rabbitmq:
+        image: rabbitmq:3-management-alpine # Usa a imagem oficial com a UI de gerenciamento
+        container_name: idh-rabbitmq
+        restart: unless-stopped
+        environment:
+            # Define as credenciais (padrão é guest/guest)
+            RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+            RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+        ports:
+            # 5672: Porta do protocolo AMQP (para Java/Python)
+            - "5672:5672"
+            # 15672: Porta da UI de gerenciamento (acesse em http://localhost:15672)
+            - "15672:15672"
+
+    # --- 3. Serviço: Backend (Java Spring Boot) ---
+    backend:
+        build:
+            context: ./backend # Onde encontrar o Dockerfile
+            dockerfile: Dockerfile
+        container_name: idh-backend
+        restart: unless-stopped
+        depends_on:
+            - db # Só inicia DEPOIS que o 'db' estiver pronto
+            - rabbitmq # Só inicia DEPOIS que o 'rabbitmq' estiver pronto
+        ports:
+            # Mapeia a porta 8080 do PC para a porta 8080 do contêiner
+            - "8080:8080"
+        environment:
+            # Define as variáveis de ambiente que o application.properties espera
+            - DB_HOST=db # 'db' é o nome do serviço MySQL
+            - DB_PORT=3306
+            - DB_NAME=${DB_NAME}
+            - DB_USER=root # O MySQL no Docker usa 'root' por padrão
+            - DB_PASSWORD=${DB_PASSWORD}
+            - RABBITMQ_HOST=rabbitmq # 'rabbitmq' é o nome do serviço RabbitMQ
+            - RABBITMQ_PORT=5672
+            - RABBITMQ_USER=${RABBITMQ_USER}
+            - RABBITMQ_PASS=${RABBITMQ_PASS}
+        volumes:
+            # Monta o volume nomeado 'app-uploads' no caminho /app/uploads
+            # Este é o caminho que o Java (Paths.get("uploads")) usa DENTRO do contêiner
+            - app-uploads:/app/uploads
+
+    # --- 4. Serviço: Worker (Python) ---
+    worker:
+        build:
+            context: ./processing_worker # Onde encontrar o Dockerfile
+            dockerfile: Dockerfile
+        container_name: idh-worker
+        restart: unless-stopped
+        depends_on:
+            - backend # Garante que o backend (que pode criar a pasta) inicie primeiro
+            - db
+            - rabbitmq
+        environment:
+            # Define as variáveis de ambiente que o worker.py espera
+            - DB_HOST=db
+            - DB_PORT=3306
+            - DB_NAME=${DB_NAME}
+            - DB_USER=root
+            - DB_PASSWORD=${DB_PASSWORD}
+            - RABBITMQ_HOST=rabbitmq
+            - RABBITMQ_PORT=5672
+            - RABBITMQ_USER=${RABBITMQ_USER}
+            - RABBITMQ_PASS=${RABBITMQ_PASS}
+        volumes:
+            # Monta os modelos (leitura)
+            - ./models:/app/models:ro # :ro = read-only (boa prática)
+            # Monta o MESMO volume de uploads no caminho que o Python espera
+            # O 'file_path_relative' (ex: uploads/source_3.csv) é lido do DB
+            # O worker.py procura em (BACKEND_DIR / file_path_relative)
+            # No Docker, BACKEND_DIR = /backend
+            # Então, mapeamos o volume para /backend/uploads
+            - app-uploads:/app/backend/uploads # Ajuste de caminho sutil, mas crucial
+
+    # --- 5. Serviço: Frontend (React + Nginx) ---
+    frontend:
+        build:
+            context: ./frontend/idh-dashboard # Onde encontrar o Dockerfile
+            dockerfile: Dockerfile
+        container_name: idh-frontend
+        restart: unless-stopped
+        ports:
+            # Mapeia a porta 5173 do PC para a porta 80 do Nginx
+            - "5173:80"
+        depends_on:
+            - backend # O frontend precisa da API para funcionar
+
+# --- Volumes Nomeados ---
+# Define os volumes que criamos para persistir dados
+volumes:
+    db-data:
+    app-uploads: # Volume compartilhado para os arquivos CSV

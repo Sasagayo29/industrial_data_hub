@@ -1,0 +1,15 @@
+# Ignorar a pasta de build do Maven (será criada DENTRO do contêiner)
+target/
+
+# Ignorar logs
+*.log
+
+# Ignorar pastas de IDE e Git
+.git/
+.vscode/
+.idea/
+
+# Ignorar arquivos do wrapper do Maven (não são necessários na imagem)
+.mvn/
+mvnw
+mvnw.cmd

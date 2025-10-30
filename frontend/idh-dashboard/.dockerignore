@@ -1,0 +1,14 @@
+# Ignorar dependências locais (serão instaladas DENTRO do contêiner)
+node_modules/
+
+# Ignorar a pasta de build local (será criada DENTRO do contêiner)
+dist/
+
+# Ignorar logs do npm
+npm-debug.log*
+yarn-error.log
+
+# Ignorar pastas de IDE e Git
+.git/
+.vscode/
+.idea/

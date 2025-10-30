@@ -1,0 +1,12 @@
+# Ignorar o ambiente virtual local
+.venv/
+
+# Ignorar caches do Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignorar pastas de IDE e Git
+.git/
+.vscode/
+.idea/
