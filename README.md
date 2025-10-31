@@ -37,7 +37,81 @@ O IDH é composto por 5 serviços principais que rodam em contêineres Docker is
 4.  **`rabbitmq` (RabbitMQ):** A fila de mensagens. Recebe "pedidos de trabalho" do `backend` e os entrega ao `worker`.
 5.  **`worker` (Python):** O consumidor da fila. Ouve o `rabbitmq`, executa as tarefas de ML e escreve os resultados de volta no `db`.
 
-![Diagrama de Arquitetura (Simplificado)](https://i.imgur.com/v8F2J8f.png)
+```mermaid
+graph TD
+    %% Define os "Atores" (usuário)
+    User["Usuário\n(Analista Industrial)"]
+
+    %% Define os Contêineres do Docker Compose
+    subgraph industrial_data_hub [Docker Compose]
+        direction LR
+
+        %% Frontend (Serviço Nginx)
+        subgraph Frontend
+            direction TB
+            FE["Frontend (React/Nginx)\nPorta: 5173"]
+        end
+
+        %% Backend (Serviço Java)
+        subgraph Backend
+            direction TB
+            BE["Backend API (Java Spring Boot)\nPorta: 8080"]
+        end
+
+        %% Worker (Serviço Python)
+        subgraph Worker
+            direction TB
+            WK["Worker (Python ML)\nOuve a Fila"]
+        end
+
+        %% Serviços de Dados
+        subgraph DataServices [Serviços de Dados]
+            direction TB
+            MQ["Message Queue (RabbitMQ)\nPorta: 5672 (Jobs)\nPorta: 15672 (Admin UI)"]
+            
+            %% Sintaxe correta para Bando de Dados (Cilindro)
+            DB[("Database (MySQL)\nPorta: 3307")]
+        end
+
+        %% Volumes Persistentes (Dados)
+        subgraph Volumes [Dados Persistentes no Disco]
+            direction TB
+            Vol_DB[Volume: Dados do MySQL]
+            Vol_Uploads["Volume: Arquivos (Uploads)"]
+            Vol_Models["Pasta Local: Modelos (ML)"]
+        end
+    end
+
+    %% --- Fluxo de Interação ---
+
+    %% Fluxo de Visualização e Upload
+    User -- "1. Acessa Dashboard" --> FE
+    FE -- "2. API Call (GET / POST)" --> BE
+    BE -- "3. Salva/Lê Metadados (JPA)" --> DB
+    BE -- "4. Salva Arquivo (Upload)" --> Vol_Uploads
+
+    %% Fluxo de Análise Assíncrona
+    FE -- "5. API Call (POST /analyze)" --> BE
+    BE -- "6. Cria Job (Status: PENDING)" --> DB
+    BE -- "7. Publica Job (JSON)" --> MQ
+    MQ -- "8. Entrega Job" --> WK
+    
+    WK -- "9. Atualiza Status (RUNNING)" --> DB
+    WK -- "10. Lê Arquivo" --> Vol_Uploads
+    WK -- "11. Lê Modelo ML" --> Vol_Models
+    WK -- "12. Executa Análise (TF/Pandas)" --> WK
+    WK -- "13. Salva Resultado (COMPLETED + JSON)" --> DB
+
+    %% Fluxo de Polling (Resultado)
+    FE -- "14. Polling (GET /analysis/latest/...)" --> BE
+    BE -- "15. Lê Status/Resultado" --> DB
+    DB -- "16. Retorna Job (ex: COMPLETED)" --> BE
+    BE -- "17. Retorna JSON para o React" --> FE
+    FE -- "18. Exibe Gráfico no Modal" --> User
+
+    %% Persistência do DB
+    DB -.-> Vol_DB
+```
 
 ## 4. Stack de Tecnologias
 
