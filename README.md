@@ -145,23 +145,46 @@ Este projeto é 100% conteinerizado. A única dependência necessária na sua m�
     * **RabbitMQ (Admin UI):** [http://localhost:15672](http://localhost:15672) (Login: `guest` / Senha: `guest`)
 
 ## 7. Como Usar
+### Detecção de Anomalias
 
 1.  **Abra o Dashboard:** Acesse [http://localhost:5173](http://localhost:5173).
+
+    <img width="1916" height="908" alt="image" src="https://github.com/user-attachments/assets/81ecd229-4b09-4873-9b82-5f1b1cfe8a4c" />
+
+
 2.  **Registre uma Fonte:**
     * No formulário, dê um nome (ex: "Teste Anomalia SKAB").
     * Selecione o "Tipo de Análise" correto (ex: `Detecção de Anomalias (SKAB)`).
     * Clique em "Escolher arquivo" e faça o upload do arquivo CSV correspondente (ex: `00.csv` do dataset SKAB).
     * Clique em "Registrar Fonte".
+
+    
+    <img width="1897" height="789" alt="image" src="https://github.com/user-attachments/assets/19b0e1c4-8294-49a2-a415-df464f7d5050" />
+
+
 3.  **Dispare a Análise:**
     * A lista de fontes será atualizada.
     * Encontre sua nova fonte e clique no botão **"Analisar"**.
+
+      
+    <img width="1009" height="272" alt="image" src="https://github.com/user-attachments/assets/33471295-d40e-4492-bc4d-6ca5fa9ecbd5" />
+
+
 4.  **Acompanhe o Status:**
     * O status mudará para `Status: PENDING...`.
     * (Nos bastidores, o Java enviou um job para o RabbitMQ, e o Python o pegou).
     * O frontend fará "polling" a cada 3 segundos. Quando o worker Python terminar, o status mudará para:
     * `Resultado: 23 anomalias detectadas... (Ver Gráfico)`
+
+    
+    <img width="1287" height="292" alt="image" src="https://github.com/user-attachments/assets/eebfd71c-8563-4a88-a5e1-2566726ff434" />
+
+
 5.  **Veja o Gráfico:**
     * Clique no link **"(Ver Gráfico)"**.
     * Um modal (popup) será aberto, renderizando o gráfico detalhado dos erros de reconstrução vs. o limiar.
 
-*(Repita o processo com um arquivo `train_FD001.txt` e o tipo `Previsão de RUL` para ver o roteador em ação!)*
+    
+    <img width="1894" height="903" alt="image" src="https://github.com/user-attachments/assets/5212b030-2305-46a8-a52a-b7df06412cfa" />
+
+
