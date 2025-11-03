@@ -15,7 +15,7 @@ services:
         ports:
             # Mapeia a porta 3306 do seu PC para a porta 3306 do contêiner
             # Permite que você conecte via MySQL Workbench
-            - "3306:3306"
+            - "3307:3306"
         volumes:
             # Cria um "volume nomeado" para persistir os dados do banco
             - db-data:/var/lib/mysql

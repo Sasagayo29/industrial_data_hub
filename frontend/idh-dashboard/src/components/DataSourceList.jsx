@@ -1,10 +1,12 @@
 // Arquivo: frontend/idh-dashboard/src/components/DataSourceList.jsx
-// (VERSÃO COMPLETA E CORRIGIDA para exibir o gráfico no Modal)
+// (VERSÃO FINAL - Substitua o seu arquivo por este)
 
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import Modal from "react-modal";
-import AnomalyChart from "./AnomalyChart.jsx"; // <-- IMPORTADO
+// --- IMPORTAÇÕES DOS GRÁFICOS ---
+import AnomalyChart from "./AnomalyChart.jsx";
+import RulChart from "./RulChart.jsx"; // Importa o gráfico de RUL
 
 Modal.setAppElement("#root");
 
@@ -15,11 +17,11 @@ function DataSourceList({ listKey }) {
     const [analysisJobs, setAnalysisJobs] = useState({});
     const pollingIntervalsRef = useRef({});
     const [selectedJobDetails, setSelectedJobDetails] = useState(null);
-    const isMountedRef = useRef(true); // Trava de segurança contra "race condition"
+    const isMountedRef = useRef(true);
 
     // Efeito 1: Carregar a lista de fontes
     useEffect(() => {
-        isMountedRef.current = true; // Define como montado
+        isMountedRef.current = true;
         const fetchDataSources = async () => {
             if (isMountedRef.current) setLoading(true);
             if (isMountedRef.current) setError(null);
@@ -49,13 +51,12 @@ function DataSourceList({ listKey }) {
 
     // Efeito 2: Limpeza Mestra
     useEffect(() => {
-        // A função retornada é executada quando o componente é desmontado
         return () => {
             console.log("DataSourceList desmontado. Limpando todos os timers.");
             Object.values(pollingIntervalsRef.current).forEach(clearInterval);
             pollingIntervalsRef.current = {};
         };
-    }, []); // Array vazio [] = rodar apenas no mount/unmount
+    }, []);
 
     // Função para parar um timer de polling específico
     const stopPolling = (id) => {
@@ -152,29 +153,23 @@ function DataSourceList({ listKey }) {
         }
     };
 
-    // Função que prepara os dados e abre o Modal
+    // Função que prepara os dados e abre o Modal (COM LÓGICA DE PARSE DUPLO)
     const openModalWithData = (job) => {
         console.log("[DEBUG] Preparando dados do modal para Job:", job);
-        console.log(
-            "[DEBUG] Tipo do job.resultDetailsJson:",
-            typeof job.resultDetailsJson
-        );
-        console.log(
-            "[DEBUG] Conteúdo do job.resultDetailsJson:",
-            job.resultDetailsJson
-        );
 
         try {
             let parsedDetails = null;
 
-            // --- CORREÇÃO: PARSE DUPLO ---
-            console.log("[DEBUG] Tentativa 1: Analisando resultDetailsJson...");
             if (typeof job.resultDetailsJson === "string") {
+                console.log(
+                    "[DEBUG] Tentativa 1: Analisando resultDetailsJson (que é string)..."
+                );
                 parsedDetails = JSON.parse(job.resultDetailsJson);
             } else if (
                 typeof job.resultDetailsJson === "object" &&
                 job.resultDetailsJson !== null
             ) {
+                console.log("[DEBUG] resultDetailsJson já é um objeto.");
                 parsedDetails = job.resultDetailsJson; // Já é um objeto
             } else {
                 throw new Error(
@@ -182,21 +177,20 @@ function DataSourceList({ listKey }) {
                 );
             }
 
-            // SEGUNDA VERIFICAÇÃO: O resultado do primeiro parse ainda é uma string?
+            // Verificação de "Parse-Duplo"
             if (typeof parsedDetails === "string") {
                 console.log(
                     "[DEBUG] Tentativa 2: O resultado do primeiro parse ainda é uma STRING. Analisando novamente..."
                 );
-                parsedDetails = JSON.parse(parsedDetails); // Faz o parse da string interna
+                parsedDetails = JSON.parse(parsedDetails);
             }
-            // --- FIM DA CORREÇÃO ---
 
             console.log(
                 "[DEBUG] Parse concluído. Dados finais:",
                 parsedDetails
             );
 
-            // Define os dados para o modal (isso o abrirá na próxima renderização)
+            // Define os dados para o modal
             setSelectedJobDetails({ ...job, parsedDetails });
         } catch (e) {
             console.error("Erro ao analisar JSON de resultados:", e);
@@ -207,10 +201,6 @@ function DataSourceList({ listKey }) {
                 parseError: e.message,
             });
         }
-
-        // [LINHA DO BUG REMOVIDA] A linha "setSelectedJobDetails(job);"
-        // que estava aqui foi removida, pois ela sobrescrevia o estado
-        // com 'parsedDetails' e causava o bug.
     };
 
     // Função para fechar o Modal
@@ -240,7 +230,12 @@ function DataSourceList({ listKey }) {
                 const hasDetails =
                     job.resultDetailsJson && job.resultDetailsJson !== "null";
 
-                // Vamos apenas mostrar o link se tiver detalhes
+                // --- ALTERAÇÃO: Mude o texto do link se for QC ---
+                const linkText =
+                    job.analysisType === "QC_VISUAL_CLASSIFICATION"
+                        ? "(Ver Veredito)"
+                        : "(Ver Gráfico)";
+
                 if (hasDetails) {
                     return (
                         <a
@@ -256,8 +251,8 @@ function DataSourceList({ listKey }) {
                                 textDecoration: "underline",
                             }}
                         >
-                            Resultado: {job.resultSummary || "Concluído"} (Ver
-                            Detalhes)
+                            Resultado: {job.resultSummary || "Concluído"}{" "}
+                            {linkText}
                         </a>
                     );
                 }
@@ -285,6 +280,81 @@ function DataSourceList({ listKey }) {
         }
     };
 
+    // --- FUNÇÃO AUXILIAR PARA RENDERIZAR O CONTEÚDO DO MODAL ---
+    const renderModalContent = () => {
+        if (!selectedJobDetails) return null;
+
+        const { parsedDetails, parseError, analysisType } = selectedJobDetails;
+
+        // CASO 1: Erro no Parse (mostra antes de tudo)
+        if (parseError) {
+            return (
+                <p style={{ color: "red" }}>
+                    Erro ao analisar dados: {parseError}
+                </p>
+            );
+        }
+
+        // CASO 2: O parse funcionou, mas não há detalhes
+        if (!parsedDetails) {
+            return <p>Análise concluída sem dados detalhados.</p>;
+        }
+
+        // --- ROTEADOR DE VISUALIZAÇÃO ---
+        switch (analysisType) {
+            case "ANOMALY_DETECTION":
+                return <AnomalyChart analysisData={parsedDetails} />;
+
+            case "RUL_PREDICTION":
+                // Certifique-se que o RulChart.jsx existe na pasta components
+                return <RulChart analysisData={parsedDetails} />;
+
+            case "QC_VISUAL_CLASSIFICATION":
+                const color =
+                    parsedDetails.verdict === "APROVADO" ? "green" : "red";
+                return (
+                    <div
+                        style={{
+                            padding: "20px",
+                            background: "#f4f4f4",
+                            textAlign: "center",
+                            borderRadius: "8px",
+                            marginTop: "15px",
+                        }}
+                    >
+                        <h4 style={{ margin: 0, color: "#333" }}>
+                            Veredito da Classificação:
+                        </h4>
+                        <p
+                            style={{
+                                fontSize: "2.5em",
+                                fontWeight: "bold",
+                                margin: "10px 0 0 0",
+                                color: color,
+                            }}
+                        >
+                            {parsedDetails.verdict}
+                        </p>
+                        <small style={{ color: "#555" }}>
+                            Confiança:{" "}
+                            {parsedDetails.confidence_percent?.toFixed(2) ??
+                                "N/A"}
+                            %
+                        </small>
+                    </div>
+                );
+
+            default:
+                // CASO 5: Fallback para tipos desconhecidos
+                return (
+                    <p>
+                        Tipo de análise ({analysisType}) não possui visualização
+                        detalhada.
+                    </p>
+                );
+        }
+    };
+
     return (
         <div>
             <h2>Fontes de Dados Registradas</h2>
@@ -305,6 +375,7 @@ function DataSourceList({ listKey }) {
                                     border: "1px solid #eee",
                                     padding: "10px",
                                     marginBottom: "10px",
+                                    borderRadius: "8px",
                                 }}
                             >
                                 <div>
@@ -346,7 +417,7 @@ function DataSourceList({ listKey }) {
                 </ul>
             )}
 
-            {/* --- MODAL ATUALIZADO PARA MOSTRAR O GRÁFICO --- */}
+            {/* --- MODAL ATUALIZADO (VERSÃO FINAL COM ROTEADOR) --- */}
             <Modal
                 isOpen={selectedJobDetails !== null}
                 onRequestClose={closeModal}
@@ -364,6 +435,8 @@ function DataSourceList({ listKey }) {
                         padding: "25px",
                         maxHeight: "85vh",
                         overflowY: "auto",
+                        borderRadius: "8px",
+                        color: "#333", // <-- CORREÇÃO PARA TEXTO BRANCO
                     },
                     overlay: {
                         backgroundColor: "rgba(0, 0, 0, 0.75)",
@@ -371,7 +444,6 @@ function DataSourceList({ listKey }) {
                     },
                 }}
             >
-                {/* VERIFICA SE O JOB FOI SELECIONADO */}
                 {selectedJobDetails && (
                     <div>
                         <button
@@ -383,7 +455,8 @@ function DataSourceList({ listKey }) {
                                 cursor: "pointer",
                                 background: "none",
                                 border: "none",
-                                fontSize: "1.2em",
+                                fontSize: "1.5em",
+                                color: "#888",
                             }}
                             aria-label="Fechar modal"
                         >
@@ -398,26 +471,8 @@ function DataSourceList({ listKey }) {
                             {selectedJobDetails.resultSummary}
                         </p>
 
-                        {/* --- CONTEÚDO DINÂMICO --- */}
-                        {selectedJobDetails.parseError ? (
-                            // 1. Se deu erro no parse
-                            <p style={{ color: "red" }}>
-                                Erro ao analisar dados do gráfico:{" "}
-                                {selectedJobDetails.parseError}
-                            </p>
-                        ) : selectedJobDetails.parsedDetails ? (
-                            // 2. Se o parse funcionou, renderiza o gráfico
-                            <AnomalyChart
-                                analysisData={selectedJobDetails.parsedDetails}
-                            />
-                        ) : (
-                            // 3. Se não tem dados de detalhe (mas não deu erro)
-                            <p>
-                                Análise concluída sem dados detalhados para
-                                exibição.
-                            </p>
-                        )}
-                        {/* --- FIM DO CONTEÚDO DINÂMICO --- */}
+                        {/* --- LÓGICA DE RENDERIZAÇÃO DINÂMICA --- */}
+                        {renderModalContent()}
                     </div>
                 )}
             </Modal>
